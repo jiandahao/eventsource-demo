@@ -10,19 +10,24 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"time"
-)
-var(
-	mesChannel map[string]chan string
-	msg string
-	consumer *list.List = &list.List{}
 )
 
 type (
 	Message struct {
 		Data string `json:"data"`
 		Target string `json:"target"`
+		Topic string `json:"topic"`
 	}
+
+	Consumer struct {
+		conn net.Conn
+		eMessage chan string
+		topics string //*list.List
+	}
+)
+
+var(
+	topicConsumerList map[string]*list.List = make(map[string]*list.List )
 )
 
 func main(){
@@ -37,6 +42,33 @@ func main(){
 	}
 }
 
+func newConsumer(w http.ResponseWriter, r *http.Request) (*Consumer, error){
+	consumer := &Consumer{}
+	conn  , _, err := w.(http.Hijacker).Hijack()
+	if  err != nil{
+		w.WriteHeader(502)
+		w.Write([]byte("internal error"))
+		return nil, err
+	}
+	_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
+	if err != nil{
+		conn.Close()
+		return nil, err
+	}
+	_, err = conn.Write([]byte("\r\n"))
+	consumer.conn = conn
+	consumer.topics = r.URL.Query().Get("topics")
+	print(consumer.topics)
+	if consumer.topics == ""{
+		w.WriteHeader(400)
+		w.Write([]byte("invalid argument, set the topic that you are interested"))
+		return nil, fmt.Errorf("invalid argument")
+	}
+	consumer.eMessage  = make(chan string)
+	return consumer,nil
+}
+
+
 func Log(handler http.Handler) http.Handler{
 	log.Println("Server is running at port :8081")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,77 +77,51 @@ func Log(handler http.Handler) http.Handler{
 	})
 }
 func EventSourceHandler(w http.ResponseWriter, r *http.Request){
+	consumer , err := newConsumer(w,r)
+	if err != nil{
+		fmt.Println(err)
+		return
+	}
+	if topicConsumerList[consumer.topics] == nil{
+		topicConsumerList[consumer.topics] = &list.List{}
+	}
 
-	conn, _, err := w.(http.Hijacker).Hijack()
-	if err != nil{
-		w.WriteHeader(502)
-		return
-	}
-	_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
-	if err != nil{
-		conn.Close()
-		return
-	}
-	consumer.PushBack(conn)
+	topicConsumerList[consumer.topics].PushBack(consumer)
+	//isReady := make(chan bool)
 	go func() {
-		var id int = 0
+		//<-isReady
+		fmt.Println("start")
 		for{
-			id++
-			msg := fmt.Sprintf("id:%s\ndata: test\nevent:tick-event\n\n",strconv.Itoa(id))
-			//fmt.Printf(msg)
-			for c := consumer.Front(); c != nil; c = c.Next(){
-				c.Value.(net.Conn).Write([]byte(msg))
+			select{
+			case msg := <- consumer.eMessage:
+				fmt.Println("Received a message")
+				consumer.conn.Write([]byte(msg))
 			}
-			time.Sleep(2*time.Second)
 		}
 	}()
-	//conn.Write([]byte("Cache-Control:no-cache"))
-	//conn.Write([]byte("Connection:keep-alive"))
-
-	//w.Header().Set("Content-Type","text/event-stream")
-	//w.Header().Set("Cache-Control","no-cache")
-	//w.Header().Set("Connection","keep-alive")
-
-	//w.Write([]byte(":注释\n\n"))
-	//w.Write([]byte("data:"+ "hahahahaha" + "\n\n"))
-	//for{
-	//	select  {
-	//		case res := <- mesChannel :
-	//			w.Write([]byte("data:"+ res + "\n\n"))
-	//	}
-	//}
-	//if mesChannel == nil{
-	//	mesChannel = make(map[string]chan string)
-	//}
-	//
-	//if mesChannel["demo"] == nil {
-	//	mesChannel["demo"] = make(chan string)
-	//}
-	//res := <-mesChannel["demo"]
-	//fmt.Println("got")
-	//w.Write([]byte("data:" + res + "\n\n"))
-
+	//consumer.conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
+	//w.Write([]byte(":comment"))
+	fmt.Println("done")
+	//isReady <- true
 }
 
+var id int = 0
 func SendNotification(w http.ResponseWriter, r *http.Request){
 	message := Message{}
 	if err := GetRequestBody(r,&message); err != nil{
 		log.Println(err)
 	}
-	if message.Target == ""{
-		w.WriteHeader(400)
-		return
+
+	if message.Topic != "" && topicConsumerList[message.Topic] != nil{
+		id++
+		for consumer := topicConsumerList[message.Topic].Front(); consumer != nil; consumer = consumer.Next(){
+			msg := fmt.Sprintf("id: %s\n event:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
+			go func() {
+				consumer.Value.(*Consumer).eMessage <- msg
+			}()
+		}
 	}
-	if mesChannel[message.Target] == nil{
-		w.WriteHeader(401)
-		return
-	}
-	//msg = message.Data
-	fmt.Println(message.Target)
-	fmt.Println(message.Data)
-	mesChannel[message.Target] <- message.Data
-	log.Println("done")
-	w.Write([]byte("success"))
+
 }
 
 func GetRequestBody(request *http.Request, form interface{}) error{

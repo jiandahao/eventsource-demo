@@ -7,7 +7,7 @@
 <body>
 <script>
     if ('EventSource' in window) {
-        var source = new EventSource('/sse')
+        var source = new EventSource('/sse?topics=log')
         source.open = function (event) {
             console.log('success connected')
         }
