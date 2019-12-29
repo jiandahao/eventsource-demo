@@ -56,6 +56,8 @@ func newConsumer(w http.ResponseWriter, r *http.Request) (*Consumer, error){
 		return nil, err
 	}
 	_, err = conn.Write([]byte("\r\n"))
+	_, err = conn.Write([]byte("\r\n"))
+	_, err = conn.Write([]byte("\r\n"))
 	consumer.conn = conn
 	consumer.topics = r.URL.Query().Get("topics")
 	print(consumer.topics)
@@ -99,6 +101,13 @@ func EventSourceHandler(w http.ResponseWriter, r *http.Request){
 			}
 		}
 	}()
+	//go func() {
+	//	for {
+	//		consumer.eMessage <- fmt.Sprintf("id: %s\n event:%s\ndata:%s\n\n","1","log","nihao")
+	//		time.Sleep(2*time.Second)
+	//	}
+	//
+	//}()
 	//consumer.conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
 	//w.Write([]byte(":comment"))
 	fmt.Println("done")
@@ -112,12 +121,18 @@ func SendNotification(w http.ResponseWriter, r *http.Request){
 		log.Println(err)
 	}
 
+	fmt.Println("sending topics")
 	if message.Topic != "" && topicConsumerList[message.Topic] != nil{
 		id++
-		for consumer := topicConsumerList[message.Topic].Front(); consumer != nil; consumer = consumer.Next(){
+		consumers := topicConsumerList[message.Topic]
+		for consumer := consumers.Front(); consumer != nil; consumer = consumer.Next(){
+			print(consumer)
 			msg := fmt.Sprintf("id: %s\n event:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
+			//fmt.Println(msg)
+			c  := consumer
 			go func() {
-				consumer.Value.(*Consumer).eMessage <- msg
+				print(msg)
+				c.Value.(*Consumer).eMessage <- msg
 			}()
 		}
 	}
