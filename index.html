@@ -6,24 +6,52 @@
 </head>
 <body>
 <script>
-    if ('EventSource' in window) {
-        var source = new EventSource('/sse?topics=log')
-        source.open = function (event) {
-            console.log('success connected')
-        }
+    function subscribe() {
+        if ('EventSource' in window) {
+            var source = new EventSource('/sse?topics=log')
+            source.open = function (event) {
+                console.log('success connected')
+            }
 
-        source.error = function (error) {
-            console.log('failure when listening with error :' + error)
-        }
+            source.error = function (error) {
+                console.log('failure when listening with error :' + error)
+            }
 
-        source.onmessage = function (event) {
-            console.log('Unknown event with message :' + event.data)
-        }
+            source.onmessage = function (event) {
+                console.log('Unknown event with message :' + event.data)
+            }
 
-        source.addEventListener('log',function (event) {
-            console.log('log event with message :'+event.data)
+            source.addEventListener('log',function (event) {
+                console.log('log event with message :'+event.data)
+                const title = 'Server send event demo'
+                const options = {
+                    body: `you have a message from server: ${event.data}`,
+                    tag:'sse-event',
+                    data:{
+                        url:'https://www.baidu.com',
+                    },
+                    renotify:true
+                }
+                new Notification(title,options)
+            })
+        }
+    }
+    if (Notification.permission === 'granted'){
+        subscribe()
+    }else if (Notification.permission === 'denied'){
+        console.log('User has refused to receive notification')
+    }else{
+        Notification.requestPermission( permission =>  {
+            if( permission === 'granted'){
+                subscribe()
+            }else if( permission === 'denied'){
+                console.log('User refused to receive notification')
+            }else{
+                console.log('User cancelled')
+            }
         })
     }
+
 </script>
 </body>
 </html>
