@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<script>
+    function subscribe() {
+        if ('EventSource' in window) {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log(registration)
+                    console.log('Register successfully')
+                })
+            }
+        }
+    }
+    if (Notification.permission === 'granted'){
+        subscribe()
+    }else if (Notification.permission === 'denied'){
+        console.log('User has refused to receive notification')
+    }else{
+        Notification.requestPermission( permission =>  {
+            if( permission === 'granted'){
+                subscribe()
+            }else if( permission === 'denied'){
+                console.log('User refused to receive notification')
+            }else{
+                console.log('User cancelled')
+            }
+        })
+    }
+
+</script>
+</body>
+</html>

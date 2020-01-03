@@ -51,6 +51,9 @@ func newConsumer(w http.ResponseWriter, r *http.Request) (*Consumer, error){
 		w.Write([]byte("internal error"))
 		return nil, err
 	}
+
+	// response with HTTP/1.1 200 OK, and with Content-Type : text/event-stream
+	// more details refer to https://www.w3.org/TR/2009/WD-eventsource-20090421
 	_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
 	if err != nil{
 		conn.Close()
@@ -66,6 +69,8 @@ func newConsumer(w http.ResponseWriter, r *http.Request) (*Consumer, error){
 		return nil, fmt.Errorf("invalid argument")
 	}
 	consumer.eMessage  = make(chan string)
+	// tell the client it's the end of message, otherwise client will pending until receiving an '\n\n'
+	_, err = conn.Write([]byte("\n\n"))
 	return consumer,nil
 }
 
@@ -88,9 +93,7 @@ func EventSourceHandler(w http.ResponseWriter, r *http.Request){
 	}
 
 	topicConsumerList[consumer.topics].PushBack(consumer)
-	//isReady := make(chan bool)
 	go func() {
-		//<-isReady
 		fmt.Println("start")
 		for{
 			select{
@@ -101,16 +104,16 @@ func EventSourceHandler(w http.ResponseWriter, r *http.Request){
 		}
 	}()
 	go func() {
+		// simulate message pushing
+		id := 0
 		for {
-			consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n","1","log","nihao")
+			id++
+			consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),"log","nihao")
 			time.Sleep(3*time.Second)
 		}
 
 	}()
-	//consumer.conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"))
-	//w.Write([]byte(":comment"))
 	fmt.Println("done")
-	//isReady <- true
 }
 
 var id int = 0
@@ -125,12 +128,10 @@ func SendNotification(w http.ResponseWriter, r *http.Request){
 		id++
 		consumers := topicConsumerList[message.Topic]
 		for consumer := consumers.Front(); consumer != nil; consumer = consumer.Next(){
-			print(consumer)
-			msg := fmt.Sprintf("id: %s\n event:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
+			msg := fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
 			fmt.Println(msg)
 			c  := consumer
 			go func() {
-				print(msg)
 				c.Value.(*Consumer).eMessage <- msg
 			}()
 		}

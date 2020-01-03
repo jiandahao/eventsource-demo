@@ -21,25 +21,19 @@
                 console.log('Unknown event with message :' + event.data)
             }
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
-                    console.log(registration)
-                    console.log('Register successfully')
-                })
-            }
-            // source.addEventListener('log',function (event) {
-            //     console.log('log event with message :'+event.data)
-            //     const title = 'Server send event demo'
-            //     const options = {
-            //         body: `you have a message from server: ${event.data}`,
-            //         tag:'sse-event',
-            //         data:{
-            //             url:'https://www.baidu.com',
-            //         },
-            //         renotify:true
-            //     }
-            //     new Notification(title,options)
-            // })
+            source.addEventListener('log',function (event) {
+                console.log('log event with message :'+event.data)
+                const title = 'Server send event demo'
+                const options = {
+                    body: `you have a message from server: ${event.data}`,
+                    tag:'sse-event',
+                    data:{
+                        url:'https://www.baidu.com',
+                    },
+                    renotify:true
+                }
+                new Notification(title,options)
+            })
         }
     }
     if (Notification.permission === 'granted'){
