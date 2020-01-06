@@ -37,9 +37,34 @@ func main(){
 
 	router.UseStatic("/","./")
 	router.Get("/sse",EventSourceHandler)
+	router.Get("/sse2",EventSourceHandler2)
 	router.Post("/send",SendNotification)
 	if err := http.ListenAndServe(":8081",Log(router)); err != nil{
 		log.Println("Error occurs when listening")
+	}
+}
+
+func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
+	// Make sure that the writer supports flushing.
+	//
+	flusher, ok := w.(http.Flusher)
+
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	w.Write([]byte(":comment\n\n"))
+	flusher.Flush()
+	for{
+		time.Sleep(12*time.Second)
+		w.Write([]byte("id:jian\nevent:log\ndata:hhaahahah\n\n"))
+		flusher.Flush()
 	}
 }
 
@@ -103,16 +128,16 @@ func EventSourceHandler(w http.ResponseWriter, r *http.Request){
 			}
 		}
 	}()
-	go func() {
-		// simulate message pushing
-		id := 0
-		for {
-			id++
-			consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),"log","nihao")
-			time.Sleep(3*time.Second)
-		}
-
-	}()
+	//go func() {
+	//	// simulate message pushing
+	//	id := 0
+	//	for {
+	//		id++
+	//		consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),"log","nihao")
+	//		time.Sleep(3*time.Second)
+	//	}
+	//
+	//}()
 	fmt.Println("done")
 }
 

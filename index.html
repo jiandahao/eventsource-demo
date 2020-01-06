@@ -8,7 +8,7 @@
 <script>
     function subscribe() {
         if ('EventSource' in window) {
-            var source = new EventSource('/sse?topics=log')
+            var source = new EventSource('/sse2?topics=log')
             source.open = function (event) {
                 console.log('success connected')
             }
