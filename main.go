@@ -52,7 +52,6 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -62,6 +61,7 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 	id := 0
 	//isClosed := false
 	msgChan := make(chan string)
+	closeNotify := make(chan bool)
 	go func() {
 		for{
 			msgChan <- fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
@@ -69,6 +69,25 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 			time.Sleep(5*time.Second)
 		}
 	}()
+
+	go func() {
+		timer := time.NewTicker(100*time.Millisecond)
+		defer timer.Stop()
+		for  {
+			select {
+			case <- timer.C:
+				//msgChan <- ":ping message\n\n"
+				//fmt.Println("times up")
+				_,err := w.Write([]byte(":ping message\n\n"))
+				if err != nil{
+					closeNotify <- true
+					return
+				}
+			}
+		}
+
+	}()
+
 	for{
 		select {
 			case <- r.Context().Done():
@@ -76,7 +95,6 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 				fmt.Println("client done")
 				fmt.Println(r.Context().Err())
 				return
-
 			case msg := <- msgChan:
 				if _,err := w.Write([]byte(msg)); err!= nil{
 					fmt.Printf("write content error client died: %s",err)
@@ -84,6 +102,9 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 				}
 				fmt.Println(msg)
 				flusher.Flush()
+			case <- closeNotify:
+				fmt.Println("close notify")
+				return
 		}
 	}
 }
