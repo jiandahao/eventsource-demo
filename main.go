@@ -60,24 +60,19 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 	w.Write([]byte(":comment\n\n"))
 	flusher.Flush()
 	id := 0
+	//isClosed := false
 	msgChan := make(chan string)
 	go func() {
 		for{
-			if _,err := w.Write([]byte(fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id))); err!= nil{
-				fmt.Printf("write content error client died: %s",err)
-				return
-			}
-			fmt.Printf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
-			//msgChan <- fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
+			msgChan <- fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
 			id++
-			flusher.Flush()
 			time.Sleep(5*time.Second)
 		}
 	}()
 	for{
 		select {
 			case <- r.Context().Done():
-
+				//isClosed = true
 				fmt.Println("client done")
 				fmt.Println(r.Context().Err())
 				return
@@ -87,6 +82,7 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 					fmt.Printf("write content error client died: %s",err)
 					return
 				}
+				fmt.Println(msg)
 				flusher.Flush()
 		}
 	}
