@@ -48,7 +48,6 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 	// Make sure that the writer supports flushing.
 	//
 	flusher, ok := w.(http.Flusher)
-
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
@@ -58,13 +57,38 @@ func EventSourceHandler2(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	w.Write([]byte(":comment\n\n"))
 	flusher.Flush()
+	id := 0
+	msgChan := make(chan string)
+	go func() {
+		for{
+			if _,err := w.Write([]byte(fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id))); err!= nil{
+				fmt.Printf("write content error client died: %s",err)
+				return
+			}
+			fmt.Printf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
+			//msgChan <- fmt.Sprintf("id:jian\nevent:log\ndata:hhaahahah %v\n\n",id)
+			id++
+			flusher.Flush()
+			time.Sleep(5*time.Second)
+		}
+	}()
 	for{
-		time.Sleep(12*time.Second)
-		w.Write([]byte("id:jian\nevent:log\ndata:hhaahahah\n\n"))
-		flusher.Flush()
+		select {
+			case <- r.Context().Done():
+
+				fmt.Println("client done")
+				fmt.Println(r.Context().Err())
+				return
+
+			case msg := <- msgChan:
+				if _,err := w.Write([]byte(msg)); err!= nil{
+					fmt.Printf("write content error client died: %s",err)
+					return
+				}
+				flusher.Flush()
+		}
 	}
 }
 
@@ -124,20 +148,25 @@ func EventSourceHandler(w http.ResponseWriter, r *http.Request){
 			select{
 			case msg := <- consumer.eMessage:
 				fmt.Println("Received a message")
-				consumer.conn.Write([]byte(msg))
+				fmt.Printf(msg)
+				consumer.conn.SetWriteDeadline(time.Now().Add(20*time.Millisecond))
+				if _,err := consumer.conn.Write([]byte(msg));err != nil{
+					fmt.Println("client closed with error :" + err.Error())
+					return
+				}
 			}
 		}
 	}()
-	//go func() {
-	//	// simulate message pushing
-	//	id := 0
-	//	for {
-	//		id++
-	//		consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),"log","nihao")
-	//		time.Sleep(3*time.Second)
-	//	}
-	//
-	//}()
+	go func() {
+		// simulate message pushing
+		id := 0
+		for {
+			id++
+			consumer.eMessage <- fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),"log","nihao")
+			time.Sleep(10*time.Second)
+		}
+
+	}()
 	fmt.Println("done")
 }
 
@@ -153,7 +182,7 @@ func SendNotification(w http.ResponseWriter, r *http.Request){
 		id++
 		consumers := topicConsumerList[message.Topic]
 		for consumer := consumers.Front(); consumer != nil; consumer = consumer.Next(){
-			msg := fmt.Sprintf("id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
+			msg := fmt.Sprintf( "id: %s\nevent:%s\ndata:%s\n\n",strconv.Itoa(id),message.Topic,message.Data)
 			fmt.Println(msg)
 			c  := consumer
 			go func() {
